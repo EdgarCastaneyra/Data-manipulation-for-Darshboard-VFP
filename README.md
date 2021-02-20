@@ -4,15 +4,6 @@ This program extracts and manipulates information of an ERP software to create n
 
 The main Tables this program creates are:
 
-Sales
-Purchases
-Clients
-Account payable
-Account receivable
-Cash Flow
-Products
-Agents
-Receivable Department
-Warehouse
+Sales, Purchases, Clients, Account payable, Account receivable, Cash Flow, Products, Agents, Receivable Department, Warehouse
 
 All the tables have the main fields that lend the user to make linear, pay, bar, and all the types of graphs and the fields that will filter the information.
