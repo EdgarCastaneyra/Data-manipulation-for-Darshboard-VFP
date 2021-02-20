@@ -1,0 +1,161 @@
+*application.Visible=.f.
+CLOSE TABLES
+SET safety OFF
+SET TALK OFF
+SET DATE FRENCH
+SET CENTURY on
+SET STATUS BAR OFF
+SET DEFAULT TO SYS(5) + LEFT(SYS(2003),LEN(SYS(2003)))
+
+
+****** configuración de variables publicas*****
+PUBLIC rutavsai,rutadata
+
+
+*STORE "C:\Users\Edgar\Documents\Visual FoxPro Projects\Merced\Tablero de Control\Dashboard\Programa Fox\Tablas\" TO rutavsai
+*STORE "C:\Users\Edgar\Documents\Visual FoxPro Projects\Merced\Tablero de Control\Dashboard\Data\" TO rutadata
+
+STORE "C:\Users\Edgar\Documents\1.- Afficent\Dashboard\Dashboard\Data\" TO rutadata
+STORE "C:\Users\Edgar\Documents\1.- Afficent\Dashboard\Dashboard\Programa Fox\Tablas\" TO rutavsai
+
+
+************************ Tabla maestra de la Utilidad **********************
+		USE rutavsai + "ventas.dbf" IN 0
+		USE rutavsai + "compras.dbf" IN 0
+
+
+		SELECT fecha,subt_prod ingreso, 000000000000000000000.00000 gasto,000000000000000000000.00000 utilidad FROM ventas INTO TABLE paso1
+		SELECT ventas
+		USE
+
+		SELECT fecha, subt_prod gasto FROM compras INTO TABLE paso2
+		SELECT compras
+		USE
+
+		SELECT paso1
+		APPEND FROM paso2
+
+		SELECT YEAR(fecha) anio,MONTH(fecha) mes, SUM(ingreso) ingreso,SUM(gasto) gasto, SUM(utilidad) utilidad FROM paso1 GROUP BY 1,2 INTO TABLE uttotcomp
+
+		DROP TABLE paso1
+		DROP TABLE paso2
+
+		ALTER table uttotcomp ADD COLUMN fecha d(8)
+		replace ALL fecha WITH DATE(anio,mes,1)
+
+		DELETE FOR fecha>=DATE()
+		PACK
+
+		SELECT uttotcomp
+		replace ALL utilidad WITH ingreso-gasto
+
+		COPY TO rutadata + "Utilidad\" + "uttotcomp"
+
+
+		DROP TABLE uttotcomp
+
+************************ Ingresos **********************
+		USE rutavsai + "ventas.dbf" IN 0
+		USE rutavsai + "producto.dbf" IN 0
+		
+		SELECT fecha,DAY(fecha) DIA,MONTH(fecha) MES,YEAR(fecha) ANIO,cve_prod,subt_prod,fac,space(1) documento FROM ventas INTO TABLE paso
+		
+		replace ALL documento WITH RIGHT(fac,1)
+		SELECT MONTH(fecha) MES,YEAR(fecha) ANIO,documento,cve_prod,SUM(subt_prod) FROM paso GROUP BY 1,2,3,4 INTO TABLE ingreso
+		DROP TABLE paso
+		
+		ALTER table ingreso ADD COLUMN fecha d(8)
+		replace ALL fecha WITH DATE(anio,mes,1)
+
+		************ cruce con catalogo de productos **************
+		ALTER table ingreso ADD COLUMN cse_prod c(10)
+		ALTER table ingreso ADD COLUMN sub_cse c(10)
+		ALTER table ingreso ADD COLUMN sub_subcse c(10)
+		ALTER table ingreso ADD COLUMN desc_prod c(40)
+		ALTER table ingreso ADD COLUMN des_tial c(40)
+		ALTER table ingreso ADD COLUMN cve_tial n(10)
+
+		SELECT producto
+		INDEX on cve_prod TO a
+		SELECT ingreso
+		SET RELATION TO cve_prod INTO producto
+		replace ALL cse_prod WITH producto.cse_prod
+		replace ALL sub_cse WITH producto.sub_cse 
+		replace ALL sub_subcse WITH producto.sub_subcse 
+		replace ALL desc_prod WITH producto.desc_prod 
+		replace ALL cve_tial WITH producto.cve_tial 
+		select producto
+		USE
+		
+		
+		**************Tipo Producto****************
+
+		USE rutavsai + "tipoalma" IN 0 EXCLUSIVE
+		SELECT tipoalma
+		INDEX on cve_tial TO a
+		SELECT ingreso
+		SET RELATION TO cve_tial inTO tipoalma
+		replace ALL des_tial WITH tipoalma.des_tial
+		SELECT tipoalma
+		USE
+				
+		SELECT ventas 
+		USE
+		
+		SELECT ingreso
+		COPY TO rutadata + "Utilidad\" + "ingreso"
+		DROP TABLE ingreso
+
+************************ GASTO **********************
+		USE rutavsai + "compras.dbf" IN 0
+		USE rutavsai + "producto.dbf" IN 0
+		
+		SELECT fecha,DAY(fecha) DIA,MONTH(fecha) MES,YEAR(fecha) ANIO,cve_prod,subt_prod FROM compras INTO TABLE paso
+		
+		SELECT MONTH(fecha) MES,YEAR(fecha) ANIO,cve_prod,SUM(subt_prod) FROM paso GROUP BY 1,2,3 INTO TABLE gasto
+		DROP TABLE paso
+		
+		ALTER table gasto ADD COLUMN fecha d(8)
+		replace ALL fecha WITH DATE(anio,mes,1)
+
+		************ cruce con catalogo de productos **************
+		ALTER table gasto ADD COLUMN cse_prod c(10)
+		ALTER table gasto ADD COLUMN sub_cse c(10)
+		ALTER table gasto ADD COLUMN sub_subcse c(10)
+		ALTER table gasto ADD COLUMN desc_prod c(40)
+		ALTER table gasto ADD COLUMN des_tial c(40)
+		ALTER table gasto ADD COLUMN cve_tial n(10)
+
+		SELECT producto
+		INDEX on cve_prod TO a
+		SELECT gasto
+		SET RELATION TO cve_prod INTO producto
+		replace ALL cse_prod WITH producto.cse_prod
+		replace ALL sub_cse WITH producto.sub_cse 
+		replace ALL sub_subcse WITH producto.sub_subcse 
+		replace ALL desc_prod WITH producto.desc_prod 
+		replace ALL cve_tial WITH producto.cve_tial 
+		select producto
+		USE
+		
+				**************Tipo Producto****************
+
+		USE rutavsai + "tipoalma" IN 0 EXCLUSIVE
+		SELECT tipoalma
+		INDEX on cve_tial TO a
+		SELECT gasto
+		SET RELATION TO cve_tial inTO tipoalma
+		replace ALL des_tial WITH tipoalma.des_tial
+		SELECT tipoalma
+		USE
+
+		SELECT compras 
+		USE
+		
+		SELECT gasto
+		COPY TO rutadata + "Utilidad\" + "gasto"
+		DROP TABLE gasto
+
+
+
+

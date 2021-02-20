@@ -1,0 +1,161 @@
+*application.Visible=.f.
+CLOSE TABLES
+SET safety OFF
+SET TALK OFF
+SET DATE FRENCH
+SET CENTURY on
+SET STATUS BAR OFF
+SET DEFAULT TO SYS(5) + LEFT(SYS(2003),LEN(SYS(2003)))
+
+
+****** configuración de variables publicas*****
+PUBLIC rutavsai,rutadata
+
+
+*STORE "C:\Users\edg19\Dashboard\Programa Fox\Tablas\" TO rutavsai &&tirden
+*STORE "C:\Users\edg19\Dashboard\Data\" TO rutadata &&tirden
+
+***********************Tabla maestra cliente*************************
+USE rutavsai + "compras.dbf" IN 0 
+
+SELECT fac_comp, cve_prov,cve_mon,fecha,fech_revi,fech_venci,fech_auto,lugar,;
+SUM(comp_net) comp_net, SUM(cant_surt) cant_surt,fech_venci-DATE() dias_venc FROM compras GROUP BY 1,2,3,4,5,6,7,8 where status_fac<>"Pagada" INTO TABLE cxp
+
+ALTER table cxp ADD COLUMN Vencida n(20,2)
+ALTER table cxp ADD COLUMN siete n(20,2)
+ALTER table cxp ADD COLUMN quince n(20,2)
+ALTER table cxp ADD COLUMN treinta n(20,2)
+ALTER table cxp ADD COLUMN cuatcinco n(20,2)
+ALTER table cxp ADD COLUMN sesenta n(20,2)
+ALTER table cxp ADD COLUMN mas n(20,2)
+ALTER table cxp ADD COLUMN nom_prov c(60)
+ALTER table cxp ADD COLUMN dia_cre n(3)
+ALTER table cxp ADD COLUMN lim_cre n(20,2)
+
+
+		**********************Pega info Proveedores*************************
+		USE rutavsai + "provedor.dbf" IN 0 
+		SELECT provedor
+		INDEX on cve_prov TO a
+		SELECT cxp
+		SET RELATION TO cve_prov INTO provedor
+		replace ALL nom_prov WITH provedor.nom_prov
+		replace ALL dia_cre WITH provedor.dia_cre 
+		replace ALL lim_cre WITH provedor.lim_cre 
+
+		SELECT provedor
+		USE
+
+**************Resta los pagos que ya se hicieron*****************************************
+
+		USE rutavsai + "comprafc.dbf" IN 0 
+		
+		SELECT ALLTRIM(ALLTRIM(No_facc)+ " " + ALLTRIM(STR(cve_prov))) as llave, saldo_fac FROM comprafc INTO TABLE paso
+		SELECT comprafc
+		USE
+
+		SELECT paso
+		INDEX on llave  TO a
+		SELECT cxp
+		SET RELATION TO ALLTRIM(ALLTRIM(fac_comp)+ " " + ALLTRIM(STR(cve_prov))) INTO paso
+*SET STEP on	
+
+		replace ALL comp_net WITH ABS(paso.saldo_fac) 
+
+		DROP TABLE paso
+
+
+
+**************Pega el importe segun la fecha de vencimiento******************************
+
+		SELECT cxp
+
+		GO top IN cxp
+		DO WHILE !EOF('cxp') 
+			SELECT cxp
+			monto=cxp.COMP_NET
+			diasven=cxp.Dias_venc
+			
+					DO case
+					CASE dias_venc<0
+					REPLACE cxp.Vencida WITH monto IN cxp
+					
+					CASE dias_venc>=0 AND dias_venc<=7
+					REPLACE cxp.siete WITH monto IN cxp
+
+					CASE dias_venc>7 AND dias_venc<=15
+					REPLACE cxp.quince WITH monto IN cxp
+
+					CASE dias_venc>15 AND dias_venc<=30
+					REPLACE cxp.treinta WITH monto IN cxp
+					
+					CASE dias_venc>30 AND dias_venc<=45
+					REPLACE cxp.cuatcinco WITH monto IN cxp
+
+					CASE dias_venc>45 AND dias_venc<=60
+					REPLACE cxp.sesenta WITH monto IN cxp
+
+					CASE dias_venc>60
+					REPLACE cxp.mas WITH monto IN cxp
+
+					ENDCASE			
+
+			SKIP 1 IN cxp
+		ENDDo
+
+SELECT cxp
+RECALL all
+DELETE FOR LEFT(fac_comp,3)="RET"
+PACK
+
+SELECT cve_prov,nom_prov,fac_comp,fecha,fech_revi,fech_venci,fech_auto,cant_surt,dias_venc,vencida,siete,quince,treinta,cuatcinco,sesenta,mas,lugar FROM cxp INTO table cxpfin
+SELECT cxpfin
+
+DROP TABLE cxp
+SELECT compras
+USE
+
+
+ALTER table cxpfin ADD COLUMN n_cred n(20,2)
+ALTER table cxpfin ADD COLUMN n_carg n(20,2)
+
+
+**********************Pega info notas de crédito*************************
+USE rutavsai + "credito2.dbf" IN 0 SHARED
+
+SELECT no_prov cve_prov,SPACE(50) nom_prov,ALLTRIM(no_notac)+IIF(ALLTRIM(tip_not)="Dev. Just.","   Dev","   Desc") fac_comp,fecha,saldo n_cred,lugar FROM credito2 WHERE no_estado=="Emitida" OR no_estado=="Parcial" INTO TABLE ncred
+SELECT cxpfin
+APPEND FROM ncred
+SELECT credito2
+USE
+
+DROP TABLE ncred
+
+**********************Pega info notas de cargo*************************
+USE rutavsai + "ncargc.dbf" IN 0 SHARED
+
+SELECT cve_prov,SPACE(50) nom_prov,(ALLTRIM(no_ncargc)+"   N_cargo") fac_comp,fech_ncc fecha,(saldo_ncc*-1) n_carg,lugar FROM ncargc WHERE estado_ncc=="Emitida" OR estado_ncc=="Parcial" INTO TABLE ncarg
+SELECT cxpfin
+APPEND FROM ncarg
+SELECT ncargc
+USE
+
+DROP TABLE ncarg
+
+		**********************Pega info Proveedores*************************
+		USE rutavsai + "provedor.dbf" IN 0 
+		SELECT provedor
+		INDEX on cve_prov TO a
+		SELECT cxpfin
+		SET RELATION TO cve_prov INTO provedor
+		replace ALL nom_prov WITH provedor.nom_prov
+
+		SELECT provedor
+		USE
+
+SELECT cxpfin
+COPY TO rutadata + "flujo\" + "cxp"
+
+DROP TABLE cxpfin
+
+DO 6_flujoefectivo

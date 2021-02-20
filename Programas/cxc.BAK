@@ -1,0 +1,113 @@
+*application.Visible=.f.
+CLOSE TABLES
+SET safety OFF
+SET TALK OFF
+SET DATE FRENCH
+SET CENTURY on
+SET STATUS BAR OFF
+SET DEFAULT TO SYS(5) + LEFT(SYS(2003),LEN(SYS(2003)))
+
+
+****** configuración de variables publicas*****
+PUBLIC rutavsai,rutadata
+
+
+*STORE "C:\Users\Edgar\Documents\Visual FoxPro Projects\Merced\Tablero de Control\Dashboard\Programa Fox\Tablas\" TO rutavsai
+*STORE "C:\Users\Edgar\Documents\Visual FoxPro Projects\Merced\Tablero de Control\Dashboard\Data\" TO rutadata
+
+STORE "C:\Users\Edgar\Documents\1.- Afficent\Dashboard\Dashboard\Data\" TO rutadata
+STORE "C:\Users\Edgar\Documents\1.- Afficent\Dashboard\Dashboard\Programa Fox\Tablas\" TO rutavsai
+
+
+***********************Tabla maestra cliente*************************
+USE rutavsai + "ventas.dbf" IN 0 
+
+SELECT fac, cve_cte,cve_mon,fecha,f_pago,;
+SUM(vent_net) vent_net, SUM(cant_surt) cant_surt,f_pago-DATE() dias_venc FROM ventas GROUP BY 1,2,3,4,5 where status_fac<>"Pagada" AND NOT EMPTY(no_fac) INTO TABLE cxc
+
+ALTER table cxc ADD COLUMN Vencida n(20,2)
+ALTER table cxc ADD COLUMN siete n(20,2)
+ALTER table cxc ADD COLUMN quince n(20,2)
+ALTER table cxc ADD COLUMN treinta n(20,2)
+ALTER table cxc ADD COLUMN cuatcinco n(20,2)
+ALTER table cxc ADD COLUMN sesenta n(20,2)
+ALTER table cxc ADD COLUMN mas n(20,2)
+ALTER table cxc ADD COLUMN nom_cte c(60)
+ALTER table cxc ADD COLUMN dia_cre n(3)
+ALTER table cxc ADD COLUMN lim_cre n(20,2)
+
+
+		**********************Pega info Proveedores*************************
+		USE rutavsai + "clientes.dbf" IN 0 
+		SELECT clientes
+		INDEX on cve_cte TO a
+		SELECT cxc
+		SET RELATION TO cve_cte INTO clientes
+		replace ALL nom_cte WITH clientes.nom_cte
+		replace ALL dia_cre WITH clientes.dia_cre 
+		replace ALL lim_cre WITH clientes.lim_cre 
+
+		SELECT clientes
+		USE
+		
+		SELECT cxc
+		replace ALL dias_venc WITH -999 FOR EMPTY(f_pago)
+
+
+**************Pega el importe segun la fecha de vencimiento******************************
+
+		SELECT cxc
+
+		GO top IN cxc
+		DO WHILE !EOF('cxc') 
+			SELECT cxc
+			monto=cxc.VENT_NET
+			diasven=cxc.Dias_venc
+			
+					DO case
+					CASE dias_venc<0
+					REPLACE cxc.Vencida WITH monto IN cxc
+					
+					CASE dias_venc>=0 AND dias_venc<=7
+					REPLACE cxc.siete WITH monto IN cxc
+
+					CASE dias_venc>7 AND dias_venc<=15
+					REPLACE cxc.quince WITH monto IN cxc
+
+					CASE dias_venc>15 AND dias_venc<=30
+					REPLACE cxc.treinta WITH monto IN cxc
+					
+					CASE dias_venc>30 AND dias_venc<=45
+					REPLACE cxc.cuatcinco WITH monto IN cxc
+
+					CASE dias_venc>45 AND dias_venc<=60
+					REPLACE cxc.sesenta WITH monto IN cxc
+
+					CASE dias_venc>60
+					REPLACE cxc.mas WITH monto IN cxc
+
+					ENDCASE			
+
+			SKIP 1 IN cxc
+		ENDDo
+
+
+SELECT cxc
+RECALL all
+DELETE FOR LEFT(fac,2)="NV"
+PACK
+
+
+SELECT cve_cte,nom_cte,fac,fecha,f_pago,cant_surt,dias_venc,vencida,siete,quince,treinta,cuatcinco,sesenta,mas FROM cxc INTO table cxcfin
+SELECT cxcfin
+&&DELETE FOR EMPTY(f_pago)
+&&PACK
+
+COPY TO rutadata + "flujo\" + "cxc"
+
+DROP TABLE cxc
+SELECT ventas 
+USE
+
+
+

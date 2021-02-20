@@ -1,0 +1,311 @@
+application.Visible=.t.
+SET EXACT ON
+CLOSE TABLES
+*CLOSE DATABASES
+SET safety OFF
+SET TALK OFF
+SET DATE FRENCH
+SET CENTURY on
+SET STATUS BAR OFF
+SET DEFAULT TO SYS(5) + LEFT(SYS(2003),LEN(SYS(2003)))
+
+
+****** configuración de variables publicas*****
+*PUBLIC rutavsai, rutadata
+
+*STORE "D:\AFFICENT\Clientes SAI\King Seeds\Análisis de cobranza\tablas\" TO rutavsai &&tirden
+*STORE "D:\AFFICENT\Clientes SAI\King Seeds\Dashboard\Data\" TO rutadata &&tirden
+
+
+USE rutavsai + "PAGOS2" IN 0 EXCLUSIVE
+SELECT num,ALLTRIM((ALLTRIM(cve_factu)+ " " + ALLTRIM(no_fac))) No_FAC,clavec cve_cte,fecha,cantidad,tipo,importe,fec_rea,cve_mon,lugar,cve_age,;
+falta_fac,f_pago,status FROM pagos2 INTO TABLE cobpaso ORDER BY 2,4 desc
+
+SELECT pagos2
+USE
+
+SELECT cobpaso
+ALTER table cobpaso ADD COLUMN tot_Fac n(20,2)
+ALTER table cobpaso ADD COLUMN por_fac n(5,2)
+ALTER table cobpaso ADD COLUMN dias_cred n(10)
+ALTER table cobpaso ADD COLUMN dpag_orig n(10)
+ALTER table cobpaso ADD COLUMN dias_pag n(10)
+ALTER table cobpaso ADD COLUMN difcredpag n(10)
+
+USE rutavsai + "facturac" IN 0 EXCLUSIVE
+SELECT facturac
+INDEX on ALLTRIM((ALLTRIM(cve_factu)+ " " + ALLTRIM(no_fac))) TO a
+SELECT cobpaso
+SET RELATION TO no_fac INTO facturac
+
+replace ALL tot_fac WITH facturac.total_fac
+
+SELECT facturac
+USE
+
+SELECT cobpaso
+
+DELETE FOR status="Cancelada"
+DELETE FOR tot_fac=0
+PACK
+
+
+replace ALL por_fac WITH cantidad/tot_fac
+
+replace ALL dias_cred WITH f_pago-falta_fac
+replace ALL dpag_orig WITH fec_rea-falta_fac
+replace ALL dias_pag WITH fec_rea-falta_fac
+
+*a los días de pago negativo les ponemos cero
+replace ALL dias_pag WITH 0 for dias_pag<0
+replace ALL difcredpag WITH dias_cred-dias_pag
+
+ALTER table cobpaso ADD COLUMN lim_cre n(20,5)
+ALTER table cobpaso ADD COLUMN dia_cre n(10)
+ALTER table cobpaso ADD COLUMN cve_can n(10)
+ALTER table cobpaso ADD COLUMN nom_can c(40)
+ALTER table cobpaso ADD COLUMN nom_age c(40)
+ALTER table cobpaso ADD COLUMN cve_zon n(10)
+ALTER table cobpaso ADD COLUMN cve_sub n(10)		
+ALTER table cobpaso ADD COLUMN nom_zon c(40)
+ALTER table cobpaso ADD COLUMN nom_sub c(40)
+ALTER table cobpaso ADD COLUMN nom_cte c(40)
+ALTER table cobpaso ADD COLUMN falta_cte d(8)
+ALTER table cobpaso ADD COLUMN ult_pag d(8)
+ALTER table cobpaso ADD COLUMN ult_aplic d(8)
+
+		**********************Pega info clientes*************************
+		USE rutavsai + "clientes.dbf" IN 0 
+		SELECT clientes
+		INDEX on cve_cte TO a
+		SELECT cobpaso
+		SET RELATION TO cve_cte INTO clientes
+		replace ALL cve_can WITH clientes.cve_can
+		replace ALL falta_cte WITH clientes.falta_cte  
+		replace ALL nom_cte WITH clientes.nom_cte 
+		replace ALL cve_can WITH clientes.cve_can
+		replace ALL cve_zon WITH clientes.cve_zon
+		replace ALL cve_sub WITH clientes.cve_sub
+		replace ALL dia_cre WITH clientes.dia_cre 
+		replace ALL lim_cre WITH clientes.lim_cre 
+
+		SELECT clientes
+		USE
+
+		USE rutavsai + "canald.dbf" IN 0 
+		SELECT canald
+		INDEX on cve_can TO a
+		SELECT cobpaso
+		SET RELATION TO cve_can INTO canald
+		replace ALL nom_can WITH canald.nom_can
+		replace ALL nom_cte WITH "NA" FOR EMPTY(nom_cte)
+		replace ALL nom_can WITH "NA" FOR EMPTY(nom_can)
+
+		SELECT canald
+		USE
+
+
+			USE rutavsai + "zonas" IN 0 EXCLUSIVE
+			SELECT zonas
+			INDEX on cve_zon TO a
+			SELECT cobpaso
+			SET RELATION TO cve_zon inTO zonas
+			replace ALL nom_zon WITH zonas.nom_zon
+			SELECT zonas
+			USE
+
+			USE rutavsai + "subzonas" IN 0 EXCLUSIVE
+			SELECT subzonas
+			INDEX on cve_zon + cve_sub TO a
+			SELECT cobpaso
+			SET RELATION TO cve_zon + cve_sub inTO subzonas
+			replace ALL nom_sub WITH subzonas.nom_sub
+			SELECT subzonas
+			USE
+
+
+			**************Agentes****************
+
+			USE rutavsai + "agentes" IN 0 EXCLUSIVE
+			SELECT agentes
+			INDEX on cve_age TO a
+			SELECT cobpaso
+			SET RELATION TO cve_age inTO agentes
+			replace ALL nom_age WITH agentes.nom_age
+
+			SELECT agentes
+			USE
+
+
+
+		******************************************Pega la última fecha de compra******************************
+
+		SELECT distinct(no_fac) no_fac,fec_rea,fecha FROM cobpaso INTO TABLE ult_mes_pag
+
+		SELECT cobpaso
+		INDEX on no_fac TO b
+
+
+		SELECT ult_mes_pag
+		GO top IN ult_mes_pag
+		DO WHILE !EOF('ult_mes_pag') 
+
+			IF SEEK(ult_mes_pag.no_fac, 'cobpaso') THEN
+				REPLACE ult_mes_pag.fec_rea WITH cobpaso.fec_rea IN ult_mes_pag
+				REPLACE ult_mes_pag.fecha WITH cobpaso.fecha IN ult_mes_pag				
+			ENDIF
+
+			SKIP 1 IN ult_mes_pag
+		ENDDO
+		
+		SELECT ult_mes_pag
+		INDEX on no_fac TO c
+		SELECT cobpaso 
+		SET RELATION TO no_fac INTO ult_mes_pag
+		replace ALL ult_pag WITH ult_mes_pag.fec_rea
+		replace ALL ult_aplic WITH ult_mes_pag.fecha 		
+		DROP TABLE ult_mes_pag
+
+** quite tipo para poder agrupar por factura		
+SELECT no_fac,cve_mon,lugar,falta_fac,f_pago,tot_fac,nom_age,nom_zon,nom_sub,nom_cte,falta_cte,nom_can,dia_cre,ult_pag,ult_aplic,YEAR(falta_fac) ANIO,MONTH(falta_fac) MES;
+,SUM(cantidad) cantidad,SUM(importe) importe FROM cobpaso GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 INTO TABLE final
+
+SELECT final
+
+ALTER table final ADD COLUMN dias_cred n(10)
+ALTER table final ADD COLUMN dpag_orig n(10)
+ALTER table final ADD COLUMN dias_pag n(10)
+ALTER table final ADD COLUMN difcredpag n(10)
+ALTER table final ADD COLUMN pagocomp n(10)
+ALTER table final ADD COLUMN retraso c(10)
+
+
+SELECT final
+
+replace ALL dias_cred WITH f_pago-falta_fac
+replace ALL dpag_orig WITH ult_pag -falta_fac
+replace ALL dias_pag WITH ult_pag-falta_fac
+
+*a los días de pago negativo les ponemos cero
+replace ALL dias_pag WITH 0 for dias_pag<0
+replace ALL difcredpag WITH dias_cred-dias_pag
+replace ALL retraso WITH "Retraso" FOR difcredpag <0
+replace ALL retraso WITH "A Tiempo" FOR difcredpag >=0
+replace ALL pagocomp WITH 1 FOR (tot_fac-cantidad)=0
+replace ALL pagocomp WITH 0 FOR (tot_fac-cantidad)<>0
+
+ALTER table final ADD COLUMN fac_pag c(10)
+ALTER table final ADD COLUMN mesprompag n(10)
+ALTER table final ADD COLUMN anoprompag n(10)
+ALTER table final ADD COLUMN mespag n(10)
+ALTER table final ADD COLUMN aniopag n(10)
+ALTER table final ADD COLUMN cobtot n(20)
+ALTER table final ADD COLUMN cobreal n(20)
+
+
+replace ALL fac_pag WITH "P"
+replace ALL mesprompag WITH MONTH(F_PAGO)
+replace ALL anoprompag WITH YEAR(F_PAGO)
+replace ALL mespag WITH MONTH(ULT_APLIC)
+replace ALL aniopag WITH YEAR(ULT_APLIC)
+replace ALL cobreal WITH 1 FOR (mesprompag==mespag AND anoprompag==aniopag AND DIAS_CRED>0)
+replace ALL cobtot WITH 1 FOR (mesprompag<=mespag AND anoprompag==aniopag AND DIAS_CRED>0) OR (anoprompag<aniopag AND DIAS_CRED>0)
+
+
+
+SET STEP ON
+
+*COPY TO "D:\AFFICENT\Clientes SAI\King Seeds\Análisis de cobranza\" + "basepagos.xls" TYPE foxplus
+COPY TO rutadata + "Cobranza\" + "basecob"
+*COPY TO "C:\VSAI\archivos\Cobranza\" + "basecob.xls" TYPE foxplus
+
+DROP TABLE cobpaso
+
+
+USE rutavsai + "facturac" IN 0 EXCLUSIVE
+
+SELECT ALLTRIM((ALLTRIM(cve_factu)+ " " + ALLTRIM(no_fac))) No_FAC, cve_cte, SPACE(40) nom_cte,falta_fac,status_fac,IIF(cve_mon<>1,total_fac*tip_cam,total_fac) tot_fac,saldo_fac,f_pago,cve_Age,cve_mon,Lugar, SPACE(40) nom_age FROM facturac WHERE status_fac=="Parcial" OR status_fac=="Emitida" INTO TABLE pasofac
+
+		**********************Pega info clientes*************************
+		USE rutavsai + "clientes.dbf" IN 0 
+		SELECT clientes
+		INDEX on cve_cte TO a
+		SELECT pasofac
+		SET RELATION TO cve_cte INTO clientes
+		replace ALL nom_cte WITH clientes.nom_cte 
+		SELECT clientes
+		USE
+
+			**************Agentes****************
+
+			USE rutavsai + "agentes" IN 0 EXCLUSIVE
+			SELECT agentes
+			INDEX on cve_age TO a
+			SELECT pasofac
+			SET RELATION TO cve_age inTO agentes
+			replace ALL nom_age WITH agentes.nom_age
+
+			SELECT agentes
+			USE
+		
+
+SELECT facturac
+USE
+
+SELECT pasofac
+
+
+
+COPY TO rutadata + "Cobranza\" + "factpencob"
+
+
+SELECT final 
+INDEX on no_fac TO d
+SELECT pasofac
+SET RELATION TO no_fac INTO final
+DELETE ALL FOR final.no_fac<>pasofac.no_Fac
+
+SELECT *,"F" fac_pag  FROM pasofac WHERE DELETED() INTO TABLE facnuev
+SET RELATION to	
+SELECT final
+APPEND FROM facnuev
+SELECT final
+
+
+replace ALL dias_cred WITH f_pago-falta_fac FOR Fac_pag="F"
+replace ALL dpag_orig WITH ult_pag -falta_fac FOR Fac_pag="F"
+replace ALL dias_pag WITH ult_pag-falta_fac FOR Fac_pag="F"
+
+*a los días de pago negativo les ponemos cero
+replace ALL dias_pag WITH 0 for dias_pag<0 AND Fac_pag="F"
+replace ALL difcredpag WITH dias_cred-dias_pag FOR Fac_pag="F"
+replace ALL retraso WITH "Retraso" FOR difcredpag <0 AND Fac_pag="F"
+replace ALL retraso WITH "A Tiempo" FOR difcredpag >=0 AND Fac_pag="F"
+replace ALL pagocomp WITH 1 FOR (tot_fac-cantidad)=0 AND Fac_pag="F"
+replace ALL pagocomp WITH 0 FOR (tot_fac-cantidad)<>0 AND Fac_pag="F"
+
+replace ALL cantidad WITH tot_fac FOR Fac_pag="F"
+replace ALL mesprompag WITH MONTH(F_PAGO)FOR Fac_pag="F"
+replace ALL anoprompag WITH YEAR(F_PAGO)FOR Fac_pag="F"
+replace ALL mespag WITH MONTH(ULT_APLIC)FOR Fac_pag="F"
+replace ALL aniopag WITH YEAR(ULT_APLIC)FOR Fac_pag="F"
+replace ALL cobreal WITH 1 FOR (mesprompag==mespag AND anoprompag==aniopag AND DIAS_CRED>0) AND Fac_pag="F"
+replace ALL cobtot WITH 1 FOR Fac_pag="F"
+
+ALTER table final ADD COLUMN contador n(1)
+replace ALL contador WITH 1
+
+COPY TO rutadata + "Cobranza\" + "evcob"
+COPY TO rutavsai + "finalcob" 
+
+DROP TABLE pasofac
+DROP TABLE final 
+
+
+
+
+
+
+
+
+

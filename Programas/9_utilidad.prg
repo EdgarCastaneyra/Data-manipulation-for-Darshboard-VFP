@@ -1,0 +1,315 @@
+*application.Visible=.f.
+CLOSE TABLES
+SET safety OFF
+SET TALK OFF
+SET DATE FRENCH
+SET CENTURY on
+SET STATUS BAR OFF
+SET DEFAULT TO SYS(5) + LEFT(SYS(2003),LEN(SYS(2003)))
+
+
+****** configuración de variables publicas*****
+PUBLIC rutavsai,rutadata
+
+
+*STORE "C:\Users\Edgar\Documents\Visual FoxPro Projects\Merced\Tablero de Control\Dashboard\Programa Fox\Tablas\" TO rutavsai
+*STORE "C:\Users\Edgar\Documents\Visual FoxPro Projects\Merced\Tablero de Control\Dashboard\Data\" TO rutadata
+
+*STORE "c:\users\edg19\dashboard\Data\" TO rutadata
+*STORE "c:\users\edg19\dashboard\programa fox\tablas\" TO rutavsai
+
+
+************************ Tabla maestra de la Utilidad **********************
+		USE rutavsai + "ventas.dbf" IN 0
+		USE rutavsai + "compras.dbf" IN 0
+
+
+		SELECT lugar,fecha,vent_net ingreso, 000000000000000000000.00000 gasto,000000000000000000000.00000 utilidad FROM ventas INTO TABLE paso1
+		SELECT ventas
+		USE
+		SELECT paso1
+		replace ALL lugar WITH "Tirden" for ALLTRIM(lugar)<>"A1ISO"
+		replace ALL lugar WITH "ISO" for ALLTRIM(lugar)=="A1ISO"
+
+
+		SELECT lugar,fecha,COMP_NET gasto FROM compras INTO TABLE paso2
+		SELECT compras
+		USE
+		SELECT paso2
+		replace ALL lugar WITH "Tirden" for ALLTRIM(lugar)<>"A1ISO"
+		replace ALL lugar WITH "ISO" for ALLTRIM(lugar)=="A1ISO"
+
+		SELECT paso1
+		APPEND FROM paso2
+
+		SELECT lugar,YEAR(fecha) anio,MONTH(fecha) mes, SUM(ingreso) ingreso,SUM(gasto) gasto, SUM(utilidad) utilidad FROM paso1 GROUP BY 1,2,3 INTO TABLE uttotcomp
+
+		DROP TABLE paso1
+		DROP TABLE paso2
+
+		ALTER table uttotcomp ADD COLUMN fecha d(8)
+		DELETE FOR anio=0 OR mes=0
+		PACK
+		
+		replace ALL fecha WITH DATE(anio,mes,1)
+
+		DELETE FOR fecha>=DATE()
+		PACK
+
+		SELECT uttotcomp
+		replace ALL utilidad WITH ingreso-gasto
+
+		COPY TO rutadata + "Utilidad\" + "uttotcomp"
+
+
+		DROP TABLE uttotcomp
+
+************************ Ingresos **********************
+		USE rutavsai + "ventas.dbf" IN 0
+		USE rutavsai + "producto.dbf" IN 0
+		
+		SELECT fecha,DAY(fecha) DIA,MONTH(fecha) MES,YEAR(fecha) ANIO,cve_prod,vent_net ingreso,fac,space(1) documento,lugar FROM ventas INTO TABLE paso
+		SELECT paso
+		replace ALL lugar WITH "Tirden" for ALLTRIM(lugar)<>"A1ISO"
+		replace ALL lugar WITH "ISO" for ALLTRIM(lugar)=="A1ISO"
+		
+		replace ALL documento WITH RIGHT(ALLTRIM(fac),1)
+		SELECT MONTH(fecha) MES,YEAR(fecha) ANIO,documento,cve_prod,SUM(ingreso) total_fac,lugar FROM paso GROUP BY 1,2,3,4,6 INTO TABLE ingreso
+		DROP TABLE paso
+		
+		ALTER table ingreso ADD COLUMN fecha d(8)
+		replace ALL fecha WITH DATE(anio,mes,1)
+
+		************ cruce con catalogo de productos **************
+		ALTER table ingreso ADD COLUMN cse_prod c(10)
+		ALTER table ingreso ADD COLUMN sub_cse c(10)
+		ALTER table ingreso ADD COLUMN sub_subcse c(10)
+		ALTER table ingreso ADD COLUMN desc_prod c(40)
+		ALTER table ingreso ADD COLUMN des_tial c(40)
+		ALTER table ingreso ADD COLUMN cve_tial n(10)
+
+		SELECT producto
+		INDEX on cve_prod TO a
+		SELECT ingreso
+		SET RELATION TO cve_prod INTO producto
+		replace ALL cse_prod WITH producto.cse_prod
+		replace ALL sub_cse WITH producto.sub_cse 
+		replace ALL sub_subcse WITH producto.sub_subcse 
+		replace ALL desc_prod WITH producto.desc_prod 
+		replace ALL cve_tial WITH producto.cve_tial 
+		select producto
+		USE
+		
+		
+		**************Tipo Producto****************
+
+		USE rutavsai + "tipoalma" IN 0 EXCLUSIVE
+		SELECT tipoalma
+		INDEX on cve_tial TO a
+		SELECT ingreso
+		SET RELATION TO cve_tial inTO tipoalma
+		replace ALL des_tial WITH tipoalma.des_tial
+		SELECT tipoalma
+		USE
+				
+		SELECT ventas 
+		USE
+		
+		SELECT ingreso
+		COPY TO rutadata + "Utilidad\" + "ingreso"
+		DROP TABLE ingreso
+
+		********************************Por Factura*********************************
+		
+		USE rutavsai + "ventas.dbf" IN 0
+		
+		SELECT * FROM ventas INTO TABLE ventas1
+		SELECT ventas
+		USE
+		
+		SELECT ventas1		
+		*replace ALL VENT_NET  WITH ((((cant_surtf+cant_dev)*valor_prof)*(1-descuef/100))*(1+iva_prodf/100)) *IIF(cve_mon=1,1,tc_fac)
+		replace ALL VENT_NET  WITH ((((cant_surtf)*valor_prof)*(1-descuef/100))*(1+iva_prodf/100)) *IIF(cve_mon=1,1,tc_fac)
+		
+		SELECT no_rem,nvta,falta_rem,falta_nvta,no_fac,cve_factu,falta_fac,DAY(falta_fac) DIA,MONTH(falta_fac) MES,YEAR(falta_fac) ANIO,cve_prod,VENT_NET ingreso,fac,DATE(1999,01,01) fecdocant,;
+		status_fac,space(1) documento,lugar FROM ventas1 WHERE NOT EMPTY(no_fac) INTO TABLE paso
+		SELECT paso
+		replace ALL lugar WITH "Tirden" for ALLTRIM(lugar)<>"A1ISO"
+		replace ALL lugar WITH "ISO" for ALLTRIM(lugar)=="A1ISO"
+		
+		replace ALL documento WITH "R" FOR NOT EMPTY(no_rem)
+		replace ALL documento WITH "NV" FOR NOT EMPTY(nvta)
+		replace ALL documento WITH "DIR" FOR EMPTY(no_rem) AND EMPTY(nvta)
+		replace ALL fecdocant WITH falta_rem FOR NOT EMPTY(no_rem)
+		replace ALL fecdocant WITH falta_nvta FOR NOT EMPTY(nvta)
+		replace ALL fecdocant WITH falta_fac FOR EMPTY(no_rem) AND EMPTY(nvta)
+				
+		SELECT no_fac,IIF(EMPTY(cve_factu),"NO_FIS",CVE_FACTU) cve_factu,MONTH(fecdocant) mesdocant,YEAR(fecdocant) aniodocant,MONTH(falta_fac) MES,YEAR(falta_fac) ANIO,documento,;
+		status_fac,lugar,SUM(ingreso) total_fac FROM paso GROUP BY 1,2,3,4,5,6,7,8,9 INTO TABLE ingreso
+		DROP TABLE paso
+		
+		ALTER table ingreso ADD COLUMN fecha d(8)
+		replace ALL fecha WITH DATE(anio,mes,1) FOR NOT EMPTY(anio) OR NOT EMPTY(mes)
+		ALTER table ingreso ADD COLUMN fechaant d(8)
+		replace ALL fechaant WITH DATE(aniodocant,mesdocant,1)
+		ALTER table ingreso ADD COLUMN fecanttxt c(8)
+		replace ALL fecanttxt WITH ALLTRIM(STR(aniodocant)) + "_" + ALLTRIM(STR(mesdocant))		
+		
+		SELECT ingreso
+		COPY TO rutadata + "Utilidad\" + "ingresofac"
+		DROP TABLE ingreso
+
+		DROP TABLE ventas1
+
+************************ GASTO **********************
+		USE rutavsai + "compras.dbf" IN 0
+		USE rutavsai + "producto.dbf" IN 0
+		
+		SELECT fecha,DAY(fecha) DIA,MONTH(fecha) MES,YEAR(fecha) ANIO,cve_prod,COMP_NET gasto,lugar,lugar almacen FROM compras INTO TABLE paso
+		SELECT paso
+		replace ALL lugar WITH "Tirden" for ALLTRIM(lugar)<>"A1ISO"
+		replace ALL lugar WITH "ISO" for ALLTRIM(lugar)=="A1ISO"
+		
+		SELECT MONTH(fecha) MES,YEAR(fecha) ANIO,cve_prod,SUM(gasto)total_fac,lugar,almacen FROM paso GROUP BY 1,2,3,5,6 INTO TABLE gasto
+		DROP TABLE paso
+		
+		ALTER table gasto ADD COLUMN fecha d(8)
+		DELETE FOR anio=0 OR mes=0
+		PACK
+		
+		replace ALL fecha WITH DATE(anio,mes,1)
+
+		************ cruce con catalogo de productos **************
+		ALTER table gasto ADD COLUMN cse_prod c(10)
+		ALTER table gasto ADD COLUMN sub_cse c(10)
+		ALTER table gasto ADD COLUMN sub_subcse c(10)
+		ALTER table gasto ADD COLUMN desc_prod c(40)
+		ALTER table gasto ADD COLUMN des_tial c(40)
+		ALTER table gasto ADD COLUMN cve_tial n(10)
+
+		SELECT producto
+		INDEX on cve_prod TO a
+		SELECT gasto
+		SET RELATION TO cve_prod INTO producto
+		replace ALL cse_prod WITH producto.cse_prod
+		replace ALL sub_cse WITH producto.sub_cse 
+		replace ALL sub_subcse WITH producto.sub_subcse 
+		replace ALL desc_prod WITH producto.desc_prod 
+		replace ALL cve_tial WITH producto.cve_tial 
+		select producto
+		USE
+		
+				**************Tipo Producto****************
+
+		USE rutavsai + "tipoalma" IN 0 EXCLUSIVE
+		SELECT tipoalma
+		INDEX on cve_tial TO a
+		SELECT gasto
+		SET RELATION TO cve_tial inTO tipoalma
+		replace ALL des_tial WITH tipoalma.des_tial
+		SELECT tipoalma
+		USE
+
+		SELECT compras 
+		USE
+		
+		SELECT gasto
+		
+		replace ALL lugar WITH "NA" FOR EMPTY(lugar) AND NOT DELETED()
+		replace ALL des_tial WITH "NA" FOR EMPTY(des_tial) AND NOT DELETED()
+		replace ALL cse_prod WITH "NA" FOR EMPTY(cse_prod) AND NOT DELETED()
+		replace ALL sub_cse WITH "NA" FOR EMPTY(sub_cse) AND NOT DELETED()
+		replace ALL sub_subcse WITH "NA" FOR EMPTY(sub_subcse) AND NOT DELETED()
+		
+		COPY TO rutadata + "Utilidad\" + "gasto"
+		
+		
+				
+***********************CAtalogo de Gastos  ****************
+		SELECT distinct lugar,des_tial,cse_prod,sub_cse,sub_subcse,desc_prod FROM gasto INTO table catprod
+		
+		
+		SELECT catprod
+		replace ALL lugar WITH "NA" FOR EMPTY(lugar) AND NOT DELETED()
+		replace ALL des_tial WITH "NA" FOR EMPTY(des_tial) AND NOT DELETED()
+		replace ALL cse_prod WITH "NA" FOR EMPTY(cse_prod) AND NOT DELETED()
+		replace ALL sub_cse WITH "NA" FOR EMPTY(sub_cse) AND NOT DELETED()
+		replace ALL sub_subcse WITH "NA" FOR EMPTY(sub_subcse) AND NOT DELETED()
+		
+		
+		SELECT catprod
+		DELETE ALL
+		SELECT distinct lugar,des_tial,cse_prod, sub_cse,sub_subcse, "Todos" desc_prod FROM catprod where DELETED() INTO TABLE paso
+		SELECT catprod
+		APPEND FROM paso
+		SELECT distinct lugar,des_tial,cse_prod,sub_cse,"Todos" sub_subcse, "Todos" desc_prod from catprod  where DELETED() INTO TABLE paso
+		SELECT catprod
+		APPEND FROM paso
+		SELECT distinct lugar,des_tial,cse_prod,"Todos" sub_cse,"Todos" sub_subcse, "Todos" desc_prod from catprod where DELETED() INTO TABLE paso
+		SELECT catprod
+		APPEND FROM paso
+		SELECT distinct lugar,des_tial,"Todos" cse_prod,"Todos" sub_cse,"Todos" sub_subcse, "Todos" desc_prod from catprod where DELETED() INTO TABLE paso
+		SELECT catprod
+		APPEND FROM paso
+		SELECT distinct lugar,"Todos" des_tial,"Todos" cse_prod,"Todos" sub_cse,"Todos" sub_subcse, "Todos" desc_prod from catprod where DELETED() INTO TABLE paso
+		SELECT catprod
+		APPEND FROM paso
+		SELECT distinct desc_prod FROM  catprod where DELETED() INTO TABLE paso
+		SELECT catprod
+		APPEND FROM paso
+		SELECT distinct sub_subcse, "Todos" desc_prod FROM  catprod where DELETED() INTO TABLE paso
+		SELECT catprod
+		APPEND FROM paso
+		SELECT distinct sub_cse, "Todos" sub_subcse, "Todos" desc_prod FROM  catprod where DELETED() INTO TABLE paso
+		SELECT catprod
+		APPEND FROM paso
+		SELECT distinct cse_prod,"Todos" sub_cse, "Todos" sub_subcse, "Todos" desc_prod FROM  catprod where DELETED() INTO TABLE paso
+		SELECT catprod
+		APPEND FROM paso
+		SELECT distinct des_tial,"Todos" cse_prod,"Todos" sub_cse, "Todos" sub_subcse, "Todos" desc_prod FROM  catprod where DELETED() INTO TABLE paso
+		SELECT catprod
+		APPEND FROM paso
+
+		DROP TABLE paso
+
+		SELECT catprod
+		
+		replace ALL lugar WITH "Todos" FOR EMPTY(lugar) AND NOT DELETED()
+		replace ALL des_tial WITH "Todos" FOR EMPTY(des_tial) AND NOT DELETED()
+		replace ALL cse_prod WITH "Todos" FOR EMPTY(cse_prod) AND NOT DELETED()
+		replace ALL sub_cse WITH "Todos" FOR EMPTY(sub_cse) AND NOT DELETED()
+		replace ALL sub_subcse WITH "Todos" FOR EMPTY(sub_subcse) AND NOT DELETED()
+
+		ALTER table catprod ADD COLUMN llave c(90)
+		Replace ALL llave WITH ALLTRIM(lugar) + ALLTRIM(des_tial) + ALLTRIM(cse_prod) + ALLTRIM(sub_cse) + ALLTRIM(sub_subcse) + ALLTRIM(desc_prod)
+
+		SELECT distinct(llave) llave FROM catprod INTO TABLE catprodok
+		ALTER table catprodok ADD COLUMN lugar c(40)
+		ALTER table catprodok ADD COLUMN des_tial c(40)
+		ALTER table catprodok ADD COLUMN cse_prod c(10)
+		ALTER table catprodok ADD COLUMN sub_cse c(10)
+		ALTER table catprodok ADD COLUMN sub_subcse c(10)
+		ALTER table catprodok ADD COLUMN desc_prod c(40)
+
+		SELECT catprod
+		INDEX on llave TO a
+		SELECT catprodok
+		SET RELATION TO llave INTO catprod
+		replace ALL lugar WITH catprod.lugar 
+		replace ALL des_tial WITH catprod.des_tial 
+		replace ALL cse_prod WITH catprod.cse_prod
+		replace ALL sub_cse WITH catprod.sub_cse 
+		replace ALL sub_subcse WITH catprod.sub_subcse 
+		replace ALL desc_prod WITH catprod.desc_prod 
+
+		DROP TABLE catprod 
+
+
+
+        SELECT catprodok
+		COPY TO rutadata + "utilidad\catgto"
+		DROP TABLE catprodok
+		DROP TABLE gasto
+
+
+*DO 10_estatusdoc
