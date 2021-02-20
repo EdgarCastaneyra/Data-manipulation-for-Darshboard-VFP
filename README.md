@@ -1,6 +1,6 @@
 # Data-manipulation-for-Darshboard-VFP
 
-This program extracts and manipulates information of an ERP software to create new tables that summarise infromatión of different company areas to use them to create Graphs and KPI with the "Shiny Dashboard" library in R.
+This program was made on Visual Fox Pro to extract and manipulate information of an ERP software to create new tables that summarise infromatión of different company areas to use them to create Graphs and KPI with the "Shiny Dashboard" library in R.
 
 The main Tables this program creates are:
 
