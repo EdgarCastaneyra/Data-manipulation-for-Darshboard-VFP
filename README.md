@@ -6,4 +6,4 @@ The main Tables this program creates are:
 
 Sales, Purchases, Clients, Account payable, Account receivable, Cash Flow, Products, Agents, Receivable Department, Warehouse
 
-All the tables have the main fields that lend the user to make linear, pie, bar, and all types of graphs, also are included the fields in which the information will be filtered.
+All the tables have the main fields that allows the user to make linear, pie, bar, and all types of graphs, also are included the fields in which the information will be filtered.
